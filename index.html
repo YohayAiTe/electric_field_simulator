@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Electric Field</title>
+
+    <style>
+        html, body {
+            height: 100%;
+            width: 100%;
+            margin: 0;
+        }
+
+        canvas {
+            background-color: black;
+            position: absolute;
+            right: 0;
+        }
+
+        div#settings {
+            width: 350px;
+            left: 0;
+            position: absolute
+        }
+
+        .uc-unit::after {
+            content: '\0003BCC';
+        }
+    </style>
+
+    <script src="vector.js"></script>
+    <script src="metric_prefix.js"></script>
+    <script src="charge.js"></script>
+    <script src="arrow.js"></script>
+</head>
+<body>
+    <div id="settings">
+        <p>This is a simulation of an electric field. Each arrow represents the field at its base. The relative
+            lightness of the arrows is proportional to the relative strength of the field at that point. The direction
+            of the arrow is the direction of the field at that point.</p>
+        <p>You can create a charge by entering a number in the field bellow and clicking on the 'Create Charge'
+            button. You can move charges by left-clicking on them and moving the mouse around; To leave the charge
+            in-place just left-click again. Right-clicking on a charge will delete it. Scrolling while a charge is
+            picked-up or while hovering over a charge will change the charge's charge. Shift-scrolling while a charge is
+            picked-up or while hovering over a charge will change the charge's visual radius, but will keep its physical
+            properties.</p>
+        <div>
+            <label class="uc-unit">
+                Charge:
+                <input type="number" id="charge-input">
+            </label><br>
+            <button onclick="createCharge()">Create Charge</button>
+        </div>
+    </div>
+    <canvas id="render"></canvas>
+</body>
+<script>
+    /** @type {HTMLCanvasElement}*/
+    const canvas = document.querySelector("canvas#render")
+    canvas.width = window.innerWidth - 350
+    canvas.height = window.innerHeight
+    const ctx = canvas.getContext("2d")
+
+    const chargeRadius = Math.min(canvas.width, canvas.height) / 20
+    const arrowLength = chargeRadius / 2
+    let charges = [
+        // new Charge(+500e-6, new Vector(canvas.width / 2, canvas.height / 3), chargeRadius),
+        // new Charge(-500e-6, new Vector(canvas.width / 2, canvas.height * 2 / 3), chargeRadius),
+        // new Charge(1e-3, new Vector(canvas.width / 4, canvas.height / 2), chargeRadius),
+        // new Charge(-1000e-6, new Vector(canvas.width / 4, canvas.height / 4), chargeRadius),
+        // new Charge(-0., new Vector(canvas.width * 5 / 6, canvas.height * 9 / 10), chargeRadius),
+    ]
+    /** @type {?Charge} */
+    let mouseCharge = null
+
+    /**
+     * @returns {Charge[]}
+     */
+    function allCharges() {
+        if (mouseCharge === null) return charges;
+        return charges.concat([mouseCharge])
+    }
+
+    function createCharge() {
+        charges.push(new Charge(document.querySelector("#charge-input").value * 1e-6,
+            new Vector(canvas.width / 2, canvas.height / 2), chargeRadius))
+    }
+
+    setInterval(function () {
+        ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+
+        /** @type {Arrow[]} */
+        let arrows = []
+
+        for (let x = 0; x < 20; x++) {
+            for (let y = 0; y < 30; y++) {
+                const p = new Vector(canvas.width * (x + 1) / 21, canvas.height * (y + 1) / 31)
+                let positiveField = new Vector(), negativeField = new Vector()
+                for (const charge of allCharges()) {
+                    const currentField = charge.fieldAt(p)
+                    if (charge.charge < 0) {
+                        negativeField = negativeField.add(currentField)
+                    } else {
+                        positiveField = positiveField.add(currentField)
+                    }
+                }
+                const field = positiveField.add(negativeField)
+
+                const arrow = new Arrow(p, field, positiveField.length / field.length, arrowLength)
+                let doesIntersectCharge = false
+                for (const charge of allCharges()) {
+                    if (arrow.pos.sub(charge.pos).length < charge.radius * 1.1 ||
+                        arrow.tip.sub(charge.pos).length < charge.radius * 1.1) {
+                        doesIntersectCharge = true
+                        break
+                    }
+                }
+                if (doesIntersectCharge) continue
+                arrows.push(arrow)
+            }
+        }
+
+        let hasNonZeroCharges = false
+        let fieldMax = 0
+        for (const charge of allCharges()) {
+            let field = Math.abs(charge.fieldAt(charge.pos.add(new Vector(charge.radius, 0))).length)
+            if (field > fieldMax) fieldMax = field
+            if (charge.charge !== 0) hasNonZeroCharges = true
+        }
+
+        for (const charge of charges) charge.render(ctx)
+        if (mouseCharge !== null) mouseCharge.render(ctx);
+        if (!hasNonZeroCharges) return
+        for (const arrow of arrows) arrow.render(ctx, fieldMax)
+    }, 1000 / 60)
+
+    document.addEventListener("mousedown", function (evt) {
+        if (mouseCharge !== null) {
+            charges.push(mouseCharge)
+            mouseCharge = null
+        } else {
+            let rect = canvas.getBoundingClientRect()
+            let scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height
+            let pos = new Vector((evt.clientX - rect.left) * scaleX, (evt.clientY - rect.top) * scaleY)
+            for (let i = 0; i < charges.length; i++) {
+                if (pos.sub(charges[i].pos).length < charges[i].radius) {
+                    mouseCharge = charges[i]
+                    charges.splice(i, 1)
+                    break
+                }
+            }
+        }
+        return false
+    })
+
+    document.addEventListener("contextmenu", function (evt) {
+        evt.preventDefault()
+        if (mouseCharge !== null) {
+            mouseCharge = null
+        } else {
+            let rect = canvas.getBoundingClientRect()
+            let scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height
+            let pos = new Vector((evt.clientX - rect.left) * scaleX, (evt.clientY - rect.top) * scaleY)
+            for (let i = 0; i < charges.length; i++) {
+                if (pos.sub(charges[i].pos).length < charges[i].radius) {
+                    charges.splice(i, 1)
+                    break
+                }
+            }
+        }
+        return false
+    })
+
+    document.addEventListener("wheel", function (evt) {
+        /** @type {?Charge} */
+        let charge = null
+
+        if (mouseCharge !== null) {
+            charge = mouseCharge
+        } else {
+            let rect = canvas.getBoundingClientRect()
+            let scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height
+            let pos = new Vector((evt.clientX - rect.left) * scaleX, (evt.clientY - rect.top) * scaleY)
+            for (let i = 0; i < charges.length; i++) {
+                if (pos.sub(charges[i].pos).length < charges[i].radius) {
+                    charge = charges[i]
+                    break
+                }
+            }
+        }
+
+        if (charge === null) return
+
+        if (evt.shiftKey) {
+            charge.radius += evt.deltaY
+        } else {
+            charge.charge += evt.deltaY * 1e-9
+        }
+    })
+
+    document.addEventListener("mousemove", function (evt) {
+        if (mouseCharge !== null) {
+            let rect = canvas.getBoundingClientRect()
+            let scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height
+            mouseCharge.pos = new Vector((evt.clientX - rect.left) * scaleX, (evt.clientY - rect.top) * scaleY)
+        }
+        return false
+    })
+</script>
+</html>

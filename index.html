@@ -62,14 +62,10 @@
     const ctx = canvas.getContext("2d")
 
     const chargeRadius = Math.min(canvas.width, canvas.height) / 20
-    const arrowLength = chargeRadius / 2
-    let charges = [
-        // new Charge(+500e-6, new Vector(canvas.width / 2, canvas.height / 3), chargeRadius),
-        // new Charge(-500e-6, new Vector(canvas.width / 2, canvas.height * 2 / 3), chargeRadius),
-        // new Charge(1e-3, new Vector(canvas.width / 4, canvas.height / 2), chargeRadius),
-        // new Charge(-1000e-6, new Vector(canvas.width / 4, canvas.height / 4), chargeRadius),
-        // new Charge(-0., new Vector(canvas.width * 5 / 6, canvas.height * 9 / 10), chargeRadius),
-    ]
+    const arrowLength = chargeRadius * 2 / 5, arrowSpace = chargeRadius / 2
+    const arrowsCount = [Math.floor(canvas.width / (arrowSpace + 1)), Math.floor(canvas.height / (arrowSpace + 1))]
+    /** @type {Charge[]} */
+    let charges = []
     /** @type {?Charge} */
     let mouseCharge = null
 
@@ -93,9 +89,9 @@
         /** @type {Arrow[]} */
         let arrows = []
 
-        for (let x = 0; x < 20; x++) {
-            for (let y = 0; y < 30; y++) {
-                const p = new Vector(canvas.width * (x + 1) / 21, canvas.height * (y + 1) / 31)
+        for (let x = 0; x < arrowsCount[0]; x++) {
+            for (let y = 0; y < arrowsCount[1]; y++) {
+                const p = new Vector(canvas.width * (x + 1) / arrowsCount[0] + 1, canvas.height * (y + 1) / arrowsCount[1] + 1)
                 let positiveField = new Vector(), negativeField = new Vector()
                 for (const charge of allCharges()) {
                     const currentField = charge.fieldAt(p)
